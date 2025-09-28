@@ -1,0 +1,286 @@
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+
+package your.pkg.onboarding
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+
+/**
+ * Model for a slide (adjust to your real model).
+ */
+@Immutable
+data class OnboardSlide(
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String? = null,      // you can swap to @DrawableRes Int if you use resources
+    val viewMoreText: String = "View more"
+)
+
+/**
+ * Model for an item in the bottom sheet.
+ */
+@Immutable
+data class SheetAction(
+    val id: String,
+    val label: String,
+    val onClick: () -> Unit
+)
+
+/**
+ * Single public composable: onboarding with auto progress + tap to prev/next
+ * and a bottom sheet that is visible only when loginFeatureEnabled = true.
+ */
+@Composable
+fun OnboardingWithBottomSheet(
+    slides: List<OnboardSlide>,
+    perSlideMillis: Int = 4_000,
+    loginFeatureEnabled: Boolean,
+    loginBarText: String = "Login / Existing user",
+    sheetActions: List<SheetAction>, // pass exactly 3 to match your UI, but it supports any count
+    onViewMore: (OnboardSlide) -> Unit,
+    onGetStarted: () -> Unit,        // called when user finishes/presses CTA on last slide
+) {
+    if (slides.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No content available")
+        }
+        return
+    }
+
+    // Pager + progress state
+    val pagerState = rememberPagerState(pageCount = { slides.size })
+    val scope = rememberCoroutineScope()
+    val progress = remember(slides.size) { List(slides.size) { Animatable(0f) } }
+
+    // Bottom sheet state
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showSheet by remember { mutableStateOf(false) }
+
+    // Auto-advance for the current page
+    LaunchedEffect(pagerState.currentPage) {
+        // snap indicators: past = 1f, current = 0f, future = 0f
+        progress.forEachIndexed { i, p ->
+            when {
+                i < pagerState.currentPage -> p.snapTo(1f)
+                i == pagerState.currentPage -> p.snapTo(0f)
+                else -> p.snapTo(0f)
+            }
+        }
+        // animate current bar
+        progress[pagerState.currentPage].animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = perSlideMillis, easing = LinearEasing)
+        )
+        // go next (loop)
+        val next = (pagerState.currentPage + 1) % slides.size
+        pagerState.scrollToPage(next)
+    }
+
+    // Tap left=prev, right=next
+    val tapModifier = Modifier
+        .fillMaxSize()
+        .pointerInput(slides.size) {
+            detectTapGestures { offset ->
+                val half = size.width / 2
+                val current = pagerState.currentPage
+                if (offset.x < half) {
+                    // prev
+                    val prev = if (current > 0) current - 1 else slides.size - 1
+                    scope.launch {
+                        snapIndicatorsForPage(progress, prev)
+                        pagerState.scrollToPage(prev)
+                    }
+                } else {
+                    // next
+                    val next = (current + 1) % slides.size
+                    scope.launch {
+                        snapIndicatorsForPage(progress, next)
+                        pagerState.scrollToPage(next)
+                    }
+                }
+            }
+        }
+
+    // Sheet host
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            // CONTENT: list of actions
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(bottom = 16.dp)
+            ) {
+                Text(
+                    text = "Account",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                )
+                sheetActions.forEach { act ->
+                    ListItem(
+                        headlineContent = { Text(act.label) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickableWithoutIndication {
+                                showSheet = false
+                                act.onClick()
+                            }
+                    )
+                    Divider()
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+
+    // MAIN LAYOUT
+    Box(Modifier.fillMaxSize()) {
+
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = false, // you’re controlling via auto & tap
+            modifier = tapModifier
+                .semantics { contentDescription = "Onboarding pager" }
+        ) { page ->
+            // Replace with your real background/image layer
+            Box(Modifier.fillMaxSize())
+        }
+
+        // Foreground copy + CTA (overlay)
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .statusBarsPadding()
+        ) {
+            Spacer(Modifier.height(36.dp))
+            Text(
+                slides[pagerState.currentPage].title,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    color = Color.White, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                slides[pagerState.currentPage].subtitle,
+                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.9f))
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Progress indicators (stories-style)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .align(Alignment.CenterHorizontally),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                progress.forEach { anim ->
+                    LinearProgressIndicator(
+                        progress = anim.value,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(percent = 50)),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.35f)
+                    )
+                }
+            }
+
+            // Optional login bar that opens the sheet (only if enabled)
+            if (loginFeatureEnabled) {
+                AssistChip(
+                    onClick = {
+                        showSheet = true
+                        scope.launch { sheetState.show() }
+                    },
+                    label = { Text(loginBarText) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .semantics { contentDescription = "Open login options" }
+                )
+                Spacer(Modifier.height(10.dp))
+            }
+
+            // Primary CTA
+            val last = pagerState.currentPage == slides.lastIndex
+            Button(
+                onClick = {
+                    if (last) onGetStarted() else {
+                        val next = (pagerState.currentPage + 1).coerceAtMost(slides.lastIndex)
+                        scope.launch {
+                            snapIndicatorsForPage(progress, next)
+                            pagerState.scrollToPage(next)
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text(if (last) "Get started" else "Next")
+            }
+
+            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+}
+
+/* ----------------------------- helpers ----------------------------- */
+
+private suspend fun snapIndicatorsForPage(
+    bars: List<Animatable<Float, *>>,
+    page: Int
+) {
+    bars.forEachIndexed { i, p ->
+        when {
+            i < page -> p.snapTo(1f)
+            i == page -> p.snapTo(0f)
+            else -> p.snapTo(0f)
+        }
+    }
+}
+
+// Simple no-ripple click for sheet items
+@Composable
+private fun Modifier.clickableWithoutIndication(onClick: () -> Unit): Modifier {
+    return composed {
+        val interactionSource = remember { MutableInteractionSource() }
+        this.then(
+            Modifier
+                .indication(null, null)
+                .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+        )
+    }
+}
