@@ -1,0 +1,282 @@
+@file:OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+
+package your.pkg.onboarding
+
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
+
+@Immutable
+data class OnboardSlide(
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String? = null
+)
+
+@Immutable
+data class SheetAction(
+    val id: String,
+    val label: String,
+    val onClick: () -> Unit
+)
+
+@Composable
+fun OnboardingWithQuickActionsBottomSheet(
+    slides: List<OnboardSlide>,
+    perSlideMillis: Int = 4_000,
+    loginFeatureEnabled: Boolean,
+    quickActionsTitle: String = "Quick actions",
+    sheetActions: List<SheetAction>, // pass 3
+    onGetStarted: () -> Unit
+) {
+    if (slides.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No content available") }
+        return
+    }
+
+    val pagerState = rememberPagerState(pageCount = { slides.size })
+    val scope = rememberCoroutineScope()
+    val bars = remember(slides.size) { List(slides.size) { Animatable(0f) } }
+
+    var showSheet by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Auto progress
+    LaunchedEffect(pagerState.currentPage) {
+        bars.forEachIndexed { i, a ->
+            when {
+                i < pagerState.currentPage -> a.snapTo(1f)
+                i == pagerState.currentPage -> a.snapTo(0f)
+                else -> a.snapTo(0f)
+            }
+        }
+        bars[pagerState.currentPage].animateTo(1f, tween(perSlideMillis, easing = LinearEasing))
+        val next = (pagerState.currentPage + 1) % slides.size
+        pagerState.scrollToPage(next)
+    }
+
+    // Open sheet host
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = sheetState,
+            dragHandle = { BottomSheetDefaults.DragHandle() }
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text("Quick actions", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                // three big buttons
+                sheetActions.forEach { act ->
+                    Button(
+                        onClick = {
+                            showSheet = false
+                            act.onClick()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .padding(vertical = 6.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) { Text(act.label) }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        // Your pager (image layer omitted for brevity)
+        HorizontalPager(
+            state = pagerState,
+            userScrollEnabled = false,
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(slides.size) {
+                    detectTapGestures { offset ->
+                        val half = size.width / 2
+                        val cur = pagerState.currentPage
+                        val go = if (offset.x < half) {
+                            if (cur > 0) cur - 1 else slides.lastIndex
+                        } else (cur + 1) % slides.size
+                        scope.launch {
+                            snapIndicatorsForPage(bars, go)
+                            pagerState.scrollToPage(go)
+                        }
+                    }
+                }
+                .semantics { contentDescription = "Onboarding pager" }
+        ) { /* draw your page background/image here */ }
+
+        // Foreground text + progress + CTA
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp)
+                .statusBarsPadding()
+        ) {
+            Spacer(Modifier.height(36.dp))
+            Text(
+                slides[pagerState.currentPage].title,
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    color = Color.White, fontWeight = FontWeight.SemiBold, lineHeight = 36.sp
+                )
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                slides[pagerState.currentPage].subtitle,
+                style = MaterialTheme.typography.bodyMedium.copy(color = Color.White.copy(alpha = 0.9f))
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            // Story bars
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                bars.forEach { a ->
+                    LinearProgressIndicator(
+                        progress = a.value,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(3.dp)
+                            .clip(RoundedCornerShape(percent = 50)),
+                        color = Color.White,
+                        trackColor = Color.White.copy(alpha = 0.35f)
+                    )
+                }
+            }
+
+            // Primary CTA (Login button in your mock)
+            Button(
+                onClick = onGetStarted,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .padding(horizontal = 16.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) { Text("Log in") }
+
+            // 👇 The collapsed peek — only when enabled
+            if (loginFeatureEnabled) {
+                Spacer(Modifier.height(10.dp))
+                QuickActionsPeek(
+                    title = quickActionsTitle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                ) {
+                    showSheet = true
+                    scope.launch { sheetState.show() }
+                }
+            }
+
+            Spacer(Modifier.navigationBarsPadding())
+        }
+    }
+}
+
+/* ---------- Peek composable (looks like your screenshot) ---------- */
+
+@Composable
+private fun QuickActionsPeek(
+    title: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F7)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 10.dp, bottom = 12.dp)
+                .padding(horizontal = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // little handle
+            Box(
+                Modifier
+                    .size(width = 48.dp, height = 4.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x33000000))
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(title, color = Color(0xFF50505A))
+                Spacer(Modifier.width(6.dp))
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    tonalElevation = 0.dp
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExpandLess, // arrow-up like in mock
+                        contentDescription = null,
+                        tint = Color(0xFF50505A)
+                    )
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            // tiny underline accent (optional)
+            Box(
+                Modifier
+                    .width(54.dp)
+                    .height(2.dp)
+                    .clip(RoundedCornerShape(50))
+                    .background(Color(0x22000000))
+            )
+        }
+    }
+}
+
+/* ----------------------------- helpers ----------------------------- */
+
+private suspend fun snapIndicatorsForPage(
+    bars: List<Animatable<Float, *>>,
+    page: Int
+) {
+    bars.forEachIndexed { i, p ->
+        when {
+            i < page -> p.snapTo(1f)
+            i == page -> p.snapTo(0f)
+            else -> p.snapTo(0f)
+        }
+    }
+}
