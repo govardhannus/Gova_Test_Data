@@ -1,0 +1,165 @@
+// ONE FILE DROP-IN
+// ------------------------------------------------------------
+@file:OptIn(ExperimentalMaterial3Api::class)
+
+package com.example.quickactions
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
+
+@Composable
+fun LoginScreenWithQuickActions(
+    loginFeatureEnabled: Boolean,
+    onLoginClick: () -> Unit = {}
+) {
+    val scope = rememberCoroutineScope()
+
+    // Keep the sheet in Partial (peek) first, and allow expanding to full.
+    val sheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.PartiallyExpanded,
+        skipHiddenState = true // we don't use Hidden in this flow
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(sheetState)
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = if (loginFeatureEnabled) 84.dp else 0.dp,
+        sheetSwipeEnabled = true,
+        // top rounded “handle” is built-in for ModalSheet; for Scaffold we fake it in header
+        sheetContent = {
+            SheetHeader(
+                expanded = sheetState.currentValue == SheetValue.Expanded,
+                onToggle = {
+                    scope.launch {
+                        if (sheetState.currentValue == SheetValue.Expanded) {
+                            sheetState.partialExpand()
+                        } else {
+                            sheetState.expand()
+                        }
+                    }
+                }
+            )
+
+            // Put your actions here
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = { /* Login with Email */ },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Login with Email") }
+
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { /* Login with Google */ },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Login with Google") }
+
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    onClick = { /* Login with Phone */ },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Login with Phone") }
+
+                Spacer(Modifier.height(24.dp))
+            }
+        }
+    ) {
+        // Main screen content
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(it)
+        ) {
+            // ... your hero / pager / text etc.
+
+            // Primary CTA
+            Button(
+                onClick = onLoginClick,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text("Log in")
+            }
+
+            // Small spacer before the sheet’s peek zone
+            Spacer(Modifier.height(8.dp))
+
+            // Optional tiny arrow tap target just under the button (mirrors your mock)
+            if (loginFeatureEnabled) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clickable {
+                            scope.launch {
+                                sheetState.expand()
+                            }
+                        },
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExpandLess,
+                        contentDescription = "Open quick actions"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SheetHeader(
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    // Header row that looks like your "Quick actions  ^" bar with a drag handle
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable { onToggle() }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // drag handle mimic
+        Box(
+            Modifier
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                // small handle
+                Box(
+                    Modifier
+                        .width(36.dp)
+                        .height(4.dp)
+                        .then(Modifier)
+                ) {
+                    // Leave default surface color; theme will draw it subtly
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = "Quick actions",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+        }
+        Icon(
+            imageVector = if (expanded) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+            contentDescription = if (expanded) "Collapse" else "Expand"
+        )
+    }
+}
