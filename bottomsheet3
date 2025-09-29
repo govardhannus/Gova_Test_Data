@@ -1,0 +1,76 @@
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun OnboardingScreen(
+    loginFeatureEnabled: Boolean,
+    pagerState: PagerState,
+    ...
+) {
+    val scope = rememberCoroutineScope()
+    val sheetState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.PartiallyExpanded,
+        skipHiddenState = true
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(sheetState)
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        sheetPeekHeight = if (loginFeatureEnabled) 84.dp else 0.dp,
+        sheetSwipeEnabled = true,
+        sheetContent = {
+            SheetHeader(
+                expanded = sheetState.currentValue == SheetValue.Expanded,
+                onToggle = {
+                    scope.launch {
+                        if (sheetState.currentValue == SheetValue.Expanded)
+                            sheetState.partialExpand()
+                        else
+                            sheetState.expand()
+                    }
+                }
+            )
+
+            // Put your bottom sheet buttons here
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Button(onClick = { /* Login with Email */ }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Login with Email")
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { /* Login with Google */ }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Login with Google")
+                }
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = { /* Login with Phone */ }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Login with Phone")
+                }
+            }
+        }
+    ) { innerPadding ->
+        Column(Modifier.fillMaxSize().padding(innerPadding)) {
+            // --- Your existing pager / text / hero image goes here ---
+
+            // Main CTA
+            Button(
+                onClick = { /* login or go next */ },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) { Text("Log in") }
+
+            // Optional arrow under the button to expand sheet
+            if (loginFeatureEnabled) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .clickable { scope.launch { sheetState.expand() } },
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExpandLess,
+                        contentDescription = "Open quick actions"
+                    )
+                }
+            }
+        }
+    }
+}
