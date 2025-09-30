@@ -1,0 +1,71 @@
+@Composable
+private fun QuickActionsBottomSheet(
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+    ) {
+        // ---- Header with title + arrow ----
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onToggle() }
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Quick actions",
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowDown
+                              else Icons.Default.KeyboardArrowUp,
+                contentDescription = if (expanded) "Collapse" else "Expand"
+            )
+        }
+
+        // ---- Quick actions row (visible only if expanded) ----
+        AnimatedVisibility(visible = expanded) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                QuickActionItem(
+                    icon = Icons.Default.QrCode, // Replace with your vector
+                    text = "Scan QR code\nfor web login"
+                )
+                QuickActionItem(
+                    icon = Icons.Default.VpnKey, // Replace with your vector
+                    text = "Generate\ntoken"
+                )
+                QuickActionItem(
+                    icon = Icons.Default.Fingerprint, // Replace with your vector
+                    text = "Set up\nTouch ID"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickActionItem(icon: ImageVector, text: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(
+            imageVector = icon,
+            contentDescription = text,
+            modifier = Modifier.size(24.dp)
+        )
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+}
