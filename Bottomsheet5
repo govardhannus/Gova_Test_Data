@@ -1,0 +1,170 @@
+@Composable
+private fun QuickActionsBottomSheet(
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    scanQR: ButtonContentData?,
+    generateToken: ButtonContentData?,
+    touchID: ButtonContentData?,
+    quickAction: String
+) {
+    // 1) Build list once
+    val items = remember(scanQR, generateToken, touchID) {
+        listOfNotNull(
+            scanQR?.let {
+                buttonVerticalContent(
+                    type = "",
+                    icon = R.drawable.ic_qr_code,
+                    contentDescription = it.title.safeEmpty(),
+                    text = it.title.safeEmpty(),
+                    labelContentDescription = ""
+                )
+            },
+            generateToken?.let {
+                buttonVerticalContent(
+                    type = "",
+                    icon = R.drawable.ic_generate_token,
+                    contentDescription = it.title.safeEmpty(),
+                    text = it.title.safeEmpty(),
+                    labelContentDescription = ""
+                )
+            },
+            touchID?.let {
+                buttonVerticalContent(
+                    type = "",
+                    icon = R.drawable.ic_fingerprint,
+                    contentDescription = it.title.safeEmpty(),
+                    text = it.title.safeEmpty(),
+                    labelContentDescription = ""
+                )
+            }
+        )
+    }
+
+    // 2) Single painter remembered (we rotate it instead of swapping)
+    val arrowPainter = remember { painterResource(id = R.drawable.ic_arrow_chevron) }
+
+    // 3) Measure header + content heights once, then animate the container height only
+    val density = LocalDensity.current
+    var headerPx by remember { mutableStateOf(0) }
+    var contentPx by remember { mutableStateOf(0) }
+
+    // Transition drives all animations together
+    val transition = updateTransition(targetState = expanded, label = "sheet")
+
+    val rotation by transition.animateFloat(
+        transitionSpec = { tween(220, easing = FastOutSlowInEasing) },
+        label = "arrowRotation"
+    ) { if (it) 180f else 0f }
+
+    val animatedHeightPx by transition.animateInt(
+        transitionSpec = {
+            // spring feels smoother for height; medium stiffness removes lag
+            spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMediumLow
+            )
+        },
+        label = "sheetHeight"
+    ) {
+        // collapsed -> header only; expanded -> header + content
+        if (it) headerPx + contentPx else headerPx
+    }
+
+    val animatedHeight = with(density) { animatedHeightPx.toDp() }
+
+    // 4) Container with cheap rounded bg + stroke (no extra clips)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 0.dp)
+            .height(animatedHeight)
+            .padding(horizontal = DSGlobalDimensions.spacing.spacing07)
+            .drawWithCache {
+                val shape = RoundedCornerShape(
+                    topStart = DSGlobalDimensions.spacing.spacing05,
+                    topEnd = DSGlobalDimensions.spacing.spacing05
+                )
+                val outline = shape.createOutline(size, layoutDirection, this)
+                onDrawBehind {
+                    // background
+                    drawOutline(outline, color = Color.White)
+                    // thin border
+                    drawOutline(outline, color = Color.LightGray, style = Stroke(width = 1.dp.toPx()))
+                }
+            }
+            .clip(RoundedCornerShape(
+                topStart = DSGlobalDimensions.spacing.spacing05,
+                topEnd = DSGlobalDimensions.spacing.spacing05
+            ))
+    ) {
+        Column(Modifier.fillMaxWidth()) {
+
+            // Header (arrow + title)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { headerPx = it.size.height }
+                    .clickable(onClick = onToggle)
+                    .padding(
+                        horizontal = DSGlobalDimensions.spacing.spacing07,
+                        vertical = DSGlobalDimensions.spacing.spacing03
+                    ),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = quickAction.safeEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    color = Color.Black
+                )
+
+                Icon(
+                    painter = arrowPainter,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(DSGlobalDimensions.spacing.spacing06)
+                        .graphicsLayer { rotationZ = rotation },
+                    tint = Color.Black
+                )
+            }
+
+            // Content (measured once; height is animated by parent)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { contentPx = it.size.height }
+                    .padding(bottom = DSGlobalDimensions.spacing.spacing05)
+                    .alpha(transition.animateFloat(label = "contentAlpha") {
+                        if (it) 1f else 0f
+                    }.value)
+            ) {
+                Spacer(Modifier.height(DSGlobalDimensions.spacing.spacing03))
+                ButtonVertical(
+                    contents = items,
+                    gridColumn = 3
+                )
+            }
+        }
+    }
+}
+
+/** same factory you already have; keeping signature identical */
+@Composable
+private fun buttonVerticalContent(
+    type: String,
+    icon: Int,
+    contentDescription: String,
+    text: String,
+    labelContentDescription: String
+): ButtonVerticalContent {
+    return ButtonVerticalContent(
+        type = type,
+        iconContent = ButtonVerticalContent.Icon(
+            icon,
+            contentDescription = contentDescription
+        ),
+        text = text,
+        labelContentDescription = labelContentDescription
+    )
+}
