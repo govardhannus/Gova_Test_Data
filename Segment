@@ -1,0 +1,34 @@
+@Composable
+fun SegmentProgressBar(
+    fraction: Float,
+    modifier: Modifier = Modifier,
+    height: Dp = 4.dp
+) {
+    Canvas(
+        modifier = modifier
+            .height(height)
+            .fillMaxWidth()
+    ) {
+        val r = size.height / 2f
+        val path = Path().apply {
+            // pill-shaped clip for the whole bar
+            addRoundRect(
+                RoundRect(
+                    rect = Rect(0f, 0f, size.width, size.height),
+                    CornerRadius(r, r)
+                )
+            )
+        }
+
+        // how wide the fill should be (snap to pixel to avoid sub-px halos)
+        val w = (size.width * fraction.coerceIn(0f, 1f)).roundToInt().toFloat()
+
+        clipPath(path) {
+            // draw only the filled part; no track at all
+            drawRect(
+                color = Color.White,
+                size = Size(w, size.height)
+            )
+        }
+    }
+}
