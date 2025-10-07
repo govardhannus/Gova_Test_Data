@@ -1,0 +1,125 @@
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QuickActionsInIllustrationSheet(
+    show: Boolean,
+    onDismiss: () -> Unit,
+    data: IllustrationSheetData,              // whatever your BaseIllustrationBottomSheet expects
+    quickActionTitle: String,
+    scanQR: ButtonContentData?,
+    generateToken: ButtonContentData?,
+    touchID: ButtonContentData?,
+    onActionClick: (LoginButtonType) -> Unit  // QR_CODE / GENERATE_TOKEN / SETUP_TOUCH_ID
+) {
+    // same state pattern your BaseIllustrationBottomSheet uses
+    val bottomSheetState = rememberStandardBottomSheetState(
+        initialValue = if (show) SheetValue.Expanded else SheetValue.Hidden,
+        skipHiddenState = false
+    )
+    val scaffoldState = rememberBottomSheetScaffoldState(bottomSheetState)
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(show) {
+        scope.launch {
+            if (show) bottomSheetState.expand() else bottomSheetState.hide()
+        }
+    }
+
+    BottomSheetScaffold(
+        scaffoldState = scaffoldState,
+        // keep your usual modifiers/insets here
+        contentWindowInsets = WindowInsets(0),
+        sheetDragHandle = null,
+        sheetPeekHeight = 0.dp,
+        sheetContent = {
+            // === This is where we reproduce BaseIllustrationBottomSheet’s look ===
+            BaseColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = LocalGlobalAppDimensions.current.layoutDimens.dp24)
+            ) {
+                // 1) The illustration header block you already use
+                IllustrationMessageBuilder(
+                    title = data.title?.label.safeEmpty(),
+                    description = data.description?.label.safeEmpty(),
+                    image = data.icon?.icon?.isDrawableResourceId() ?: 0
+                )
+
+                Spacer(Modifier.height(LocalGlobalAppDimensions.current.layoutDimens.dp24))
+
+                // 2) Your Quick Actions content INSIDE the same sheet
+                Text(
+                    text = quickActionTitle.safeEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = Color.Black
+                )
+
+                Spacer(Modifier.height(12.dp))
+
+                val items = buildList {
+                    scanQR?.let {
+                        add(
+                            buttonVerticalContent(
+                                type = LoginButtonType.QRCODE.name,
+                                icon = R.drawable.ic_qr_code,
+                                contentDescription = it.title.safeEmpty(),
+                                text = it.title.safeEmpty(),
+                                labelContentDescription = ""
+                            )
+                        )
+                    }
+                    generateToken?.let {
+                        add(
+                            buttonVerticalContent(
+                                type = LoginButtonType.GENERATE_TOKEN.name,
+                                icon = R.drawable.ic_generate_token,
+                                contentDescription = it.title.safeEmpty(),
+                                text = it.title.safeEmpty(),
+                                labelContentDescription = ""
+                            )
+                        )
+                    }
+                    touchID?.let {
+                        add(
+                            buttonVerticalContent(
+                                type = LoginButtonType.SETUP_TOUCH_ID.name,
+                                icon = R.drawable.ic_fingerprint,
+                                contentDescription = it.title.safeEmpty(),
+                                text = it.title.safeEmpty(),
+                                labelContentDescription = ""
+                            )
+                        )
+                    }
+                }
+
+                ButtonVertical(
+                    contents = items,
+                    gridColumn = 3,
+                    onClick = { item ->
+                        when (item.type) {
+                            LoginButtonType.QRCODE.name -> onActionClick(LoginButtonType.QRCODE)
+                            LoginButtonType.GENERATE_TOKEN.name -> onActionClick(LoginButtonType.GENERATE_TOKEN)
+                            LoginButtonType.SETUP_TOUCH_ID.name -> onActionClick(LoginButtonType.SETUP_TOUCH_ID)
+                        }
+                    }
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // 3) Primary CTA like your BaseIllustration sheet
+                data.sheetPrimaryButton?.let { btn ->
+                    ButtonPrimary(
+                        text = btn.title?.label.safeEmpty(),
+                        onClick = {
+                            scope.launch { bottomSheetState.hide() }
+                            btn.onPrimaryButtonClick?.invoke()
+                            onDismiss()
+                        },
+                        size = ButtonPrimarySizeType.Medium
+                    )
+                }
+            }
+        }
+    ) {
+        // screen content behind the sheet (if any)
+    }
+}
